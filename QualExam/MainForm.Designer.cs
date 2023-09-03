@@ -91,9 +91,10 @@
             this.label2.Location = new System.Drawing.Point(6, 101);
             this.label2.Name = "label2";
             this.label2.Padding = new System.Windows.Forms.Padding(5);
-            this.label2.Size = new System.Drawing.Size(125, 74);
+            this.label2.Size = new System.Drawing.Size(124, 90);
             this.label2.TabIndex = 0;
-            this.label2.Text = "   Opera\r\n   Yandex browser\r\n   Google Chrome\r\n   Mozilla Firefox";
+            this.label2.Text = "   Opera\r\n   Yandex browser\r\n   Google Chrome\r\n   Mozilla Firefox\r\n   Microsoft E" +
+    "dge";
             // 
             // label1
             // 
@@ -102,7 +103,7 @@
             this.label1.Location = new System.Drawing.Point(3, 39);
             this.label1.Name = "label1";
             this.label1.Padding = new System.Windows.Forms.Padding(5);
-            this.label1.Size = new System.Drawing.Size(259, 42);
+            this.label1.Size = new System.Drawing.Size(258, 42);
             this.label1.TabIndex = 0;
             this.label1.Text = "   Запрет запуска любых исполняемых\r\n   программ";
             // 
@@ -112,7 +113,7 @@
             this.label11.Font = new System.Drawing.Font("Cambria", 10.2F);
             this.label11.Location = new System.Drawing.Point(3, 23);
             this.label11.Name = "label11";
-            this.label11.Size = new System.Drawing.Size(170, 16);
+            this.label11.Size = new System.Drawing.Size(169, 16);
             this.label11.TabIndex = 0;
             this.label11.Text = "Запрещающие политики:";
             // 
@@ -122,7 +123,7 @@
             this.label10.Font = new System.Drawing.Font("Cambria", 10.2F);
             this.label10.Location = new System.Drawing.Point(3, 84);
             this.label10.Name = "label10";
-            this.label10.Size = new System.Drawing.Size(168, 16);
+            this.label10.Size = new System.Drawing.Size(167, 16);
             this.label10.TabIndex = 0;
             this.label10.Text = "Разрешающие политики:";
             // 
@@ -194,7 +195,7 @@
             this.label8.Font = new System.Drawing.Font("Cambria", 10F);
             this.label8.Location = new System.Drawing.Point(6, 144);
             this.label8.Name = "label8";
-            this.label8.Size = new System.Drawing.Size(162, 32);
+            this.label8.Size = new System.Drawing.Size(161, 32);
             this.label8.TabIndex = 0;
             this.label8.Text = "Настройка днс-сервера. \r\nИзменение файла hosts.";
             // 
@@ -204,7 +205,7 @@
             this.label3.Font = new System.Drawing.Font("Cambria", 10.2F);
             this.label3.Location = new System.Drawing.Point(6, 23);
             this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(150, 16);
+            this.label3.Size = new System.Drawing.Size(149, 16);
             this.label3.TabIndex = 0;
             this.label3.Text = "Доступность сервисов:";
             // 
@@ -227,7 +228,7 @@
             this.label9.Font = new System.Drawing.Font("Cambria", 10F);
             this.label9.Location = new System.Drawing.Point(6, 23);
             this.label9.Name = "label9";
-            this.label9.Size = new System.Drawing.Size(238, 64);
+            this.label9.Size = new System.Drawing.Size(237, 64);
             this.label9.TabIndex = 0;
             this.label9.Text = "Запрещающие политики:\r\n\r\n   Доступ к usb - устройствам \r\n   Использование авторск" +
     "ого режима";

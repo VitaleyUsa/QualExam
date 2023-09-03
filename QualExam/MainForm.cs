@@ -1,14 +1,16 @@
-﻿using System;
+﻿using Microsoft.Win32;
+
+using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Management;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Security.Principal;
 using System.Threading;
 using System.Windows.Forms;
-
-using Microsoft.Win32;
 
 namespace QualExam
 {
@@ -24,7 +26,7 @@ namespace QualExam
 
         private const string url_test_cvalexam = "193.35.100.35 test-cvalexam.eisnot.ru";
 
-        private readonly string[] whitelist = { "QualExam.exe", "Opera.exe", "Firefox.exe", "Browser.exe", "Chrome.exe", "iexplore.exe" };
+        private readonly string[] whitelist = { "QualExam.exe", "Opera.exe", "Firefox.exe", "Browser.exe", "Chrome.exe", "iexplore.exe", "msedge.exe" };
 
         #endregion Список доступных url-ов и разрешенного софта
 
@@ -77,7 +79,7 @@ namespace QualExam
         private void MainForm_Load(object sender, EventArgs e)
         {
             FindSid();
-            GetExistingDNS(GetActiveEthernetOrWifiNetworkInterface());
+            GetExistingDNS();
             MakeGroupPainEvents();
 
             Thread SiteAvailThread = new Thread(SiteAvail)
@@ -97,10 +99,16 @@ namespace QualExam
             Network_loop = false;
             HostsWriter(false);
 
-            if (Properties.Settings.Default.DNS2 != "")
-                SetDNS(Properties.Settings.Default.DNS1 + "," + Properties.Settings.Default.DNS2);
+            if (Properties.Settings.Default.DHCP != false) SetDnsToAuto();
             else
+                if (Properties.Settings.Default.DNS2 != "")
+            {
+                SetDNS(Properties.Settings.Default.DNS1 + "," + Properties.Settings.Default.DNS2);
+            }
+            else
+            {
                 SetDNS(Properties.Settings.Default.DNS1);
+            }
 
             Border_colorN = Brushes.Red;
             group_network.Invalidate();
@@ -134,7 +142,7 @@ namespace QualExam
             }
             catch (Exception exc)
             {
-                MessageBox.Show(exc.Message);
+                Console.WriteLine(exc.Message);
             }
         }
 
@@ -156,7 +164,7 @@ namespace QualExam
             }
             catch (Exception exc)
             {
-                MessageBox.Show(exc.Message);
+                Console.WriteLine(exc.Message);
             }
         }
 
@@ -172,7 +180,7 @@ namespace QualExam
             }
             catch (Exception exc)
             {
-                MessageBox.Show(exc.Message);
+                Console.WriteLine("Error in Btn_usb_default_Click: " + exc.Message);
             }
         }
 
@@ -188,7 +196,7 @@ namespace QualExam
             }
             catch (Exception exc)
             {
-                MessageBox.Show(exc.Message);
+                Console.WriteLine("Error in Btn_usb_start_Click: " + exc.Message);
             }
         }
 
@@ -232,21 +240,70 @@ namespace QualExam
 
         private static NetworkInterface GetActiveEthernetOrWifiNetworkInterface()
         {
-            var Nic = NetworkInterface.GetAllNetworkInterfaces().FirstOrDefault(
-                a => a.OperationalStatus == OperationalStatus.Up &&
-                (a.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || a.NetworkInterfaceType == NetworkInterfaceType.Ethernet) &&
-                a.GetIPProperties().GatewayAddresses.Any(g => g.Address.AddressFamily.ToString() == "InterNetwork"));
+            NetworkInterface[] networks = NetworkInterface.GetAllNetworkInterfaces();
 
-            return Nic;
+            var activeAdapter = networks.First(x => x.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || x.NetworkInterfaceType == NetworkInterfaceType.Ethernet
+                                && x.NetworkInterfaceType != NetworkInterfaceType.Loopback
+                                && x.NetworkInterfaceType != NetworkInterfaceType.Tunnel
+                                && x.OperationalStatus == OperationalStatus.Up
+                                && x.Name.StartsWith("vEthernet") == false
+                                && x.NetworkInterfaceType != NetworkInterfaceType.Unknown
+                                && x.NetworkInterfaceType != NetworkInterfaceType.Ppp
+                                && !x.Description.Contains("TAP-Windows Adapter V9")
+                                && !x.Description.Contains("WireGuard"));
+
+            Properties.Settings.Default.Adapter = activeAdapter.Name;
+            Properties.Settings.Default.Save();
+
+            IPInterfaceProperties adapterProperties = activeAdapter.GetIPProperties();
+            IPAddress ipAddress = adapterProperties.UnicastAddresses
+                .Where(addr => addr.Address.AddressFamily == AddressFamily.InterNetwork)
+                .Select(addr => addr.Address)
+                .FirstOrDefault();
+
+            return activeAdapter;
+            //var Nic = NetworkInterface.GetAllNetworkInterfaces().FirstOrDefault(
+            //    a => a.OperationalStatus == OperationalStatus.Up &&
+            //    (a.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || a.NetworkInterfaceType == NetworkInterfaceType.Ethernet) &&
+            //    a.GetIPProperties().GatewayAddresses.Any(g => g.Address.AddressFamily.ToString() == "InterNetwork"));
+
+            //return Nic;
         }
 
-        private static void GetExistingDNS(NetworkInterface Nic)
+        private static void GetExistingDNS()
         {
-            _ = new string[2];
-            int i = 0;
-            IPInterfaceProperties adapterProperties = Nic.GetIPProperties();
+            NetworkInterface[] networks = NetworkInterface.GetAllNetworkInterfaces();
+
+            var activeAdapter = GetActiveEthernetOrWifiNetworkInterface();
+
+            IPInterfaceProperties adapterProperties = activeAdapter.GetIPProperties();
+            IPAddress ipAddress = adapterProperties.UnicastAddresses
+                .Where(addr => addr.Address.AddressFamily == AddressFamily.InterNetwork)
+                .Select(addr => addr.Address)
+                .FirstOrDefault();
+
             IPAddressCollection dnsServers = adapterProperties.DnsAddresses;
-            if (dnsServers.Count > 0)
+            IPAddressCollection dhcpServerAddresses = adapterProperties.DhcpServerAddresses;
+
+            Process process = new Process();
+            process.StartInfo.FileName = "netsh";
+            process.StartInfo.Arguments = $"interface ipv4 show dnsservers \"{activeAdapter.Name}\"";
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+
+            process.Start();
+            string output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            int i = 0;
+
+            if (output.Contains("DHCP:"))
+            {
+                Debug.WriteLine("Активный адаптер использует динамический DNS через DHCP.");
+                Properties.Settings.Default.DHCP = true;
+            }
+            else
             {
                 foreach (IPAddress dns in dnsServers)
                 {
@@ -262,8 +319,39 @@ namespace QualExam
 
                     i++;
                 }
-                Properties.Settings.Default.Save();
             }
+
+            Properties.Settings.Default.Save();
+        }
+
+        public static void SetDnsToAuto()
+        {
+            var CurrentInterface = GetActiveEthernetOrWifiNetworkInterface();
+            if (CurrentInterface == null)
+            {
+                Console.WriteLine("Активный интерфейс не найден.");
+                return;
+            }
+
+            ManagementClass objMC = new ManagementClass("Win32_NetworkAdapterConfiguration");
+            ManagementObjectCollection objMOC = objMC.GetInstances();
+
+            foreach (ManagementObject objMO in objMOC)
+            {
+                if ((bool)objMO["IPEnabled"])
+                {
+                    if (objMO["Description"].ToString() == CurrentInterface.Description)
+                    {
+                        // Попытка включить автоматическое получение DNS через DHCP.
+                        objMO.InvokeMethod("SetDNSServerSearchOrder", null);
+                        objMO.InvokeMethod("EnableDHCP", null);
+                        Console.WriteLine("DNS установлен на автоматическое получение через DHCP.");
+                        return;
+                    }
+                }
+            }
+
+            Console.WriteLine("Не удалось установить DNS на автоматическое получение.");
         }
 
         private static void SetDNS(string DnsString)
@@ -292,45 +380,63 @@ namespace QualExam
         }
 
         // Проверка доступности сайтов
-        private bool Ping(string url)
+        public static bool IsWebsiteAccessible(string url)
         {
             try
             {
-                HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create(url);
+                // Создаем HTTP-запрос.
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create("https://npso66.ru");
+
                 request.Timeout = 3000;
-                request.AllowAutoRedirect = false;
                 request.Method = "HEAD";
 
-                using (var response = request.GetResponse())
+                //Получаем ответ от сервера.
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
                 {
-                    return true;
+                    // Проверяем статус ответа.
+                    if (response.StatusCode == HttpStatusCode.OK)
+                    {
+                        // Код 200 означает, что веб-сайт доступен.
+                        return true;
+                    }
                 }
             }
-            catch
+            catch (WebException ex)
             {
+                // Перехватываем исключение и выводим дополнительную информацию об ошибке.
+                Console.WriteLine($"Ошибка при проверке доступности веб-сайта: {ex.Message}");
+                if (ex.Response != null)
+                {
+                    HttpWebResponse errorResponse = (HttpWebResponse)ex.Response;
+                    Console.WriteLine($"Статус ошибки: {errorResponse.StatusCode}");
+                }
                 return false;
             }
+
+            // Если не удалось подтвердить доступность веб-сайта, считаем его недоступным.
+            return false;
         }
 
         // В отдельном потоке для каждого сайта делаем проверку
         private void SiteAvail()
         {
-            if (Ping(label_test_contest.Text))
+            if (IsWebsiteAccessible(label_test_contest.Text))
                 label_test_contest.BeginInvoke((MethodInvoker)(() => this.label_test_contest.Text += " -> Доступен"));
             else
                 label_test_contest.BeginInvoke((MethodInvoker)(() => this.label_test_contest.Text += " -> Недоступен"));
 
-            if (Ping(label_contest.Text))
+            if (IsWebsiteAccessible(label_contest.Text))
                 label_contest.BeginInvoke((MethodInvoker)(() => this.label_contest.Text += " -> Доступен"));
             else
                 label_contest.BeginInvoke((MethodInvoker)(() => this.label_contest.Text += " -> Недоступен"));
 
-            if (Ping(label_test_cvalexam.Text))
+            if (IsWebsiteAccessible(label_test_cvalexam.Text))
                 label_test_cvalexam.BeginInvoke((MethodInvoker)(() => this.label_test_cvalexam.Text += " -> Доступен"));
             else
                 label_test_cvalexam.BeginInvoke((MethodInvoker)(() => this.label_test_cvalexam.Text += " -> Недоступен"));
 
-            if (Ping(label_cvalexam.Text))
+            if (IsWebsiteAccessible(label_cvalexam.Text))
                 label_cvalexam.BeginInvoke((MethodInvoker)(() => this.label_cvalexam.Text += " -> Доступен"));
             else
                 label_cvalexam.BeginInvoke((MethodInvoker)(() => this.label_cvalexam.Text += " -> Недоступен"));
@@ -342,18 +448,21 @@ namespace QualExam
 
         private void FindSid()
         {
-            ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT UserName FROM Win32_ComputerSystem");
-            ManagementObjectCollection collection = searcher.Get();
-            string username = (string)collection.Cast<ManagementBaseObject>().First()["UserName"];
+            WindowsIdentity identity = WindowsIdentity.GetCurrent();
+            if (identity != null)
+            {
+                sid = identity.User.Value;
 
-            NTAccount f = new NTAccount(username);
-            SecurityIdentifier s = (SecurityIdentifier)f.Translate(typeof(SecurityIdentifier));
-
-            sid = s.ToString();
-            userRoot = "HKEY_USERS" + "\\" + sid;
-            keyName = userRoot + "\\" + subkey;
-            keyName_mmc = userRoot + "\\" + subkey_mmc;
-            keyName_usb = userRoot + "\\" + subkey_usb;
+                userRoot = "HKEY_USERS" + "\\" + sid;
+                keyName = userRoot + "\\" + subkey;
+                keyName_mmc = userRoot + "\\" + subkey_mmc;
+                keyName_usb = userRoot + "\\" + subkey_usb;
+            }
+            else
+            {
+                // Обработка случая, когда имя пользователя не определено.
+                Console.WriteLine("sid not found");
+            }
         }
 
         private void HostsWriter(bool set)
@@ -376,12 +485,12 @@ namespace QualExam
                               Environment.NewLine);
 
                         try { System.IO.File.WriteAllText(path, str); }
-                        catch (Exception exc) { MessageBox.Show(exc.Message); }
+                        catch (Exception exc) { Console.WriteLine(exc.Message); }
                     }
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(ex.Message);
+                    Console.WriteLine(ex.Message);
                 }
             }
             else
@@ -441,7 +550,9 @@ namespace QualExam
             {
                 try
                 {
-                    if (Registry.GetValue(keyName_usb, "Deny_All", "0").ToString() == "1")
+                    object registryValue = Registry.GetValue(keyName_usb, "Deny_All", "0");
+
+                    if (registryValue != null && registryValue.ToString() == "1")
                     {
                         Border_colorU = Brushes.Green;
                         p.Graphics.DrawString(group_usb.Text, group_usb.Font, Border_colorU, 5, 0);
