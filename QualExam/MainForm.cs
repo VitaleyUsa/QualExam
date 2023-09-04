@@ -242,8 +242,7 @@ namespace QualExam
         {
             NetworkInterface[] networks = NetworkInterface.GetAllNetworkInterfaces();
 
-            var activeAdapter = networks.First(x => x.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || x.NetworkInterfaceType == NetworkInterfaceType.Ethernet
-                                && x.NetworkInterfaceType != NetworkInterfaceType.Loopback
+            var activeAdapter = networks.First(x => x.NetworkInterfaceType != NetworkInterfaceType.Loopback
                                 && x.NetworkInterfaceType != NetworkInterfaceType.Tunnel
                                 && x.OperationalStatus == OperationalStatus.Up
                                 && x.Name.StartsWith("vEthernet") == false
